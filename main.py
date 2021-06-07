@@ -26,6 +26,24 @@ class TrainOREvaluate(object):
             exit(1)
         # use dispatch pattern to invoke method with same name
         getattr(self, args.command)()
+
+    def validation(model, testloader, criterion):
+        accuracy = 0
+        test_loss = 0
+        for images, labels in testloader:
+
+            output = model.forward(images)
+            test_loss += criterion(output, labels).item()
+
+            ## Calculating the accuracy
+            # Model's output is log-softmax, take exponential to get the probabilities
+            ps = torch.exp(output)
+            # Class with highest probability is our predicted class, compare with true label
+            equality = (labels.data == ps.max(1)[1])
+            # Accuracy is number of correct predictions divided by all predictions, just take the mean
+            accuracy += equality.type_as(torch.FloatTensor()).mean()
+
+        return test_loss, accuracy
     
     def train(self):
         print("Training day and night")
@@ -38,25 +56,21 @@ class TrainOREvaluate(object):
         
         # TODO: Implement training loop here
         model = MyAwesomeModel()
-        train_set, _ = mnist()
+        train_set, test_set = mnist()
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr= float(args.lr))
-        epochs=5
+        epochs=2
         print_every = 40
-        running_loss = 0
-        steps = 0
         tLoss= []
 
-
-
-
+        steps = 0
+        running_loss = 0
         for e in range(epochs):
             # Model in training mode, dropout is on
             model.train()
             for images, labels in train_set:
                 steps += 1
-
 
 
                 optimizer.zero_grad()
@@ -74,27 +88,14 @@ class TrainOREvaluate(object):
 
                     # Turn off gradients for validation, will speed up inference
                     with torch.no_grad():
-                        accuracy = 0
-                        test_loss = 0
-                        for images, labels in train_set:
-
-
-                            output = model.forward(images)
-                            test_loss += criterion(output, labels).item()
-
-                            ## Calculating the accuracy
-                            # Model's output is log-softmax, take exponential to get the probabilities
-                            ps = torch.exp(output)
-                            # Class with highest probability is our predicted class, compare with true label
-                            equality = (labels.data == ps.max(1)[1])
-                            # Accuracy is number of correct predictions divided by all predictions, just take the mean
-                            accuracy += equality.type_as(torch.FloatTensor()).mean()
+                        test_loss, accuracy = TrainOREvaluate.validation(model, test_set, criterion)
 
                     print("Epoch: {}/{}.. ".format(e + 1, epochs),
                           "Training Loss: {:.3f}.. ".format(running_loss / print_every),
-                          "Test Loss: {:.3f}.. ".format(test_loss / len(train_set)),
-                          "Test Accuracy: {:.3f}".format(accuracy / len(train_set)))
-                    tLoss.append(running_loss / steps)
+                          "Test Loss: {:.3f}.. ".format(test_loss / len(test_set)),
+                          "Test Accuracy: {:.3f}".format(accuracy / len(test_set)))
+
+                    tLoss.append(running_loss / print_every)
                     running_loss = 0
 
                     # Make sure dropout and grads are on for training
